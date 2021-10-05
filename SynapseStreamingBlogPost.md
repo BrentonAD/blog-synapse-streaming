@@ -26,7 +26,7 @@ The architecture described below is built on three main philosophies.
 
 We will not go into too much detail on security and governance instead, we will sketch out an example of how to get usable data as quickly as possible.
 
-![Azure Synapse Streaming Architecture](C:\Users\brent\OneDrive\Documents\_WORK\Blogs\SynapseStreaming\img\azure-synapse-streaming-architecture.svg)
+![Azure Synapse Streaming Architecture](./img/azure-synapse-streaming-architecture.svg)
 
 If it isn't obvious by this point, the centre point of this solution is Azure Synapse. We will be using a Spark Pool to stream and process the data into the open-source Delta Lake format. Additionally, we will be using the serverless On-Demand SQL Pool to surface our data to BI users.
 
