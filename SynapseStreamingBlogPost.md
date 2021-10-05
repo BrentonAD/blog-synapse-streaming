@@ -10,7 +10,7 @@ However, new updates in Azure Synapse have made it possible to build a robust da
 
 The conversation of data lake houses, data streaming, and machine learning is often directed towards the King Pin of distributed cloud processing: Databricks. There are many benefits that Databricks brings over Synapse's vanilla version of Apache Spark for example, a shiny new Spark engine, delta table optimisation, integration with MLflow. This article does not aim to invalidate these fantastic features but offers an alternative product to consider.
 
-Indeed Microsoft seems to be pushing Synapse quite heavily with built in integration to other Microsoft products like Power BI and Azure Data Factory. If you are in the process of designing your new data platform then it's useful to know what tools are out there.
+Indeed Microsoft seems to be pushing Synapse quite heavily with built-in integration to other Microsoft products like Power BI and Azure Data Factory. If you are in the process of designing your new data platform then it's useful to know what tools are out there.
 
 ## Our Scenario
 
@@ -22,7 +22,7 @@ The architecture described below is built on three main philosophies.
 
 1. **Independence of compute and storage:** End-users, be they data analysts, data scientists, or business analysts, should be able to access the data through a variety of means. Access to the data should not be limited by the compute used.
 2. **Reduce data duplication as much as possible:** The same data should not be duplicated across various locations (separate from redundancy and disaster recovery). If data is to be accessed via different means, then only a single source should be referenced.
-3. **Serve data as quickly as possible:** The key distinction from batch processing to stream processing is the ability to get real time insights on the data coming into our system. We want to be able to serve this data as quickly as possible.
+3. **Serve data as quickly as possible:** The key distinction from batch processing to stream processing is the ability to get real-time insights on the data coming into our system. We want to be able to serve this data as quickly as possible.
 
 We will not go into too much detail on security and governance instead, we will sketch out an example of how to get usable data as quickly as possible.
 
@@ -30,7 +30,7 @@ We will not go into too much detail on security and governance instead, we will 
 
 If it isn't obvious by this point, the centre point of this solution is Azure Synapse. We will be using a Spark Pool to stream and process the data into the open-source Delta Lake format. Additionally, we will be using the serverless On-Demand SQL Pool to surface our data to BI users.
 
-Supporting our Synapse workspace are 3 additional resources:
+Supporting our Synapse workspace are three (3) additional resources:
 
 - Azure Storage Account: This Azure storage account is our Gen2 Azure Data Lake. All our data will be stored in a container within this account, organised into separate directories.
 - Azure IoT Hub: This hub we will use to manage and route messages from our simulated IoT device
@@ -207,7 +207,7 @@ At the end of this process, we are left with three populated and constantly upda
 
 As mentioned at the beginning, Synapse is typically discussed in the context of Data Warehousing. This use case highlights one way Azure Synapse can go far beyond this.
 
-Once we have set up the above streams we can utilise Synapse's built in SQL engine to query the data. Although a word of warning at the time of writing querying delta lake tables is only possible on On-Demand SQL pools and is in public preview, meaning it is not suitable for production use.
+Once we have set up the above streams we can utilise Synapse's built-in SQL engine to query the data. Although a word of warning at the time of writing querying delta lake tables is only possible on On-Demand SQL pools and is in public preview, meaning it is not suitable for production use.
 
 ![Querying data from On-demand SQL]()
 
