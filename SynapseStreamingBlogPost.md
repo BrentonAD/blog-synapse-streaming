@@ -48,7 +48,7 @@ All of our stages will be utilising [Apache Spark's Structured Streaming](https:
 
 In structured streaming, there are three components to a *data stream*: The input source, the stream engine, and the output sink. For each stage, we create the `DataStreamReader` (connect to our source), perform any Spark SQL transformations (using the streaming engine), and create a `DataStreamWriter` (output data to the sink).
 
-The notebook containing all the data processing code can be found in this GitHub repository. If you want to compare how this processing would look in Databricks, check out their notebook hosted [here](https://databricks.com/notebooks/iiot/iiot-end-to-end-part-1.html).
+The notebook containing all the data processing code can be found on my GitHub [here](https://github.com/BrentonAD/blog-synapse-streaming/blob/main/code/StreamIngestion.ipynb). If you want to compare how this processing would look in Databricks, check out their notebook hosted [here](https://databricks.com/notebooks/iiot/iiot-end-to-end-part-1.html).
 
 ### Bronze
 
@@ -76,7 +76,7 @@ iot_stream = (
 
 A quick note, when setting up our stream from IoT Hub, it is important to use the *Event Hub Compatible connection string*, rather than the *IoT hub connection string*. You can find the correct connection string through the Azure Portal:
 
-![Where to find the Event Hub Compatible Connection String]()
+![Where to find the Event Hub Compatible Connection String](./img/event-hub-compatible-connection-string.png)
 
 If you are unsure, running `iot_stream.status` will confirm whether data is successfully flowing from your IoT Hub.
 
@@ -85,21 +85,32 @@ Next, we perform our transformations. Information from the weather sensors and t
 ```python
 # Split our IoT Hub stream into separate streams and write them both into their own Delta locations
 write_turbine_to_delta = (
-  iot_stream.filter('temperature is null')                                           # Filter out turbine telemetry from other data streams
-    .select('date','timestamp','deviceId','rpm','angle')                             # Extract the fields of interest
-    .writeStream.format('delta')                                                     # Write our stream to the Delta format
-    .partitionBy('date')                                                             # Partition our data by Date for performance
-    .option("checkpointLocation", CHECKPOINT_PATH + "turbine_raw")                   # Checkpoint so we can restart streams gracefully
-    .start(BRONZE_PATH + "turbine_raw")                                              # Stream the data into an ADLS Path
+	# Filter out turbine telemetry from other data streams
+    iot_stream.filter('temperature is null')
+    # Extract the fields of interest
+    .select('date','timestamp','deviceId','rpm','angle')                             
+    # Write our stream to the Delta format
+    .writeStream.format('delta')                                                     
+    # Partition our data by Date for performance
+    .partitionBy('date')                                                             
+    # Checkpoint so we can restart streams gracefully
+    .option("checkpointLocation", CHECKPOINT_PATH + "turbine_raw")                   
+    # Stream the data into an ADLS Path
+    .start(BRONZE_PATH + "turbine_raw")                                              
 )
 
 write_weather_to_delta = (
-  iot_stream.filter(iot_stream.temperature.isNotNull())                              # Filter out weather telemetry only
+  	# Filter out weather telemetry only
+    iot_stream.filter(iot_stream.temperature.isNotNull())                              
     .select('date','deviceid','timestamp','temperature','humidity','windspeed','winddirection') 
-    .writeStream.format('delta')                                                     # Write our stream to the Delta format
-    .partitionBy('date')                                                             # Partition our data by Date for performance
-    .option("checkpointLocation", CHECKPOINT_PATH + "weather_raw")                   # Checkpoint so we can restart streams gracefully
-    .start(BRONZE_PATH + "weather_raw")                                              # Stream the data into an ADLS Path
+    # Write our stream to the Delta format
+    .writeStream.format('delta')                                                     
+    # Partition our data by Date for performance
+    .partitionBy('date')                                                             
+    # Checkpoint so we can restart streams gracefully
+    .option("checkpointLocation", CHECKPOINT_PATH + "weather_raw")                   
+    # Stream the data into an ADLS Path
+    .start(BRONZE_PATH + "weather_raw")                                              
 )
 
 ```
@@ -148,26 +159,42 @@ Afterwards, on our `DataStreamWriter`, we call the above merge method to run wit
 
 ```python
 turbine_b_to_s = (
-  spark.readStream.format('delta').table("turbine_raw")                        # Read data as a stream from our source Delta table
-    .groupBy('deviceId','date',F.window('timestamp','5 minutes'))              # Aggregate readings to hourly intervals
+  	# Read data as a stream from our source Delta table
+    spark.readStream.format('delta').table("turbine_raw")                        
+    # Aggregate readings to hourly intervals
+    .groupBy('deviceId','date',F.window('timestamp','5 minutes'))              
     .agg(F.avg('rpm').alias('rpm'), F.avg("angle").alias("angle"))
-    .writeStream                                                               # Write the resulting stream
-    .foreachBatch(lambda i, b: merge_delta(i, SILVER_PATH + "turbine_agg"))    # Pass each micro-batch to a function
-    .outputMode("update")                                                      # Merge works with update mode
-    .option("checkpointLocation", CHECKPOINT_PATH + "turbine_agg")             # Checkpoint so we can restart streams gracefully
+    .withColumn("windowStart", F.col('window').start)
+    .withColumn("windowEnd", F.col('window').end)
+    .drop("window")
+    # Write the resulting stream
+    .writeStream
+    # Pass each micro-batch to a function
+    .foreachBatch(lambda i, b: merge_delta(i, SILVER_PATH + "turbine_agg"))    
+    # Merge works with update mode
+    .outputMode("update")                                                      
+    # Checkpoint so we can restart streams gracefully
+    .option("checkpointLocation", CHECKPOINT_PATH + "turbine_agg")             
     .start()
 )
 
 weather_b_to_s = (
-  spark.readStream.format('delta').table("weather_raw")                        # Read data as a stream from our source Delta table
-    .groupBy('deviceid','date',F.window('timestamp','5 minutes'))              # Aggregate readings to hourly intervals
+    # Read data as a stream from our source Delta table
+  	spark.readStream.format('delta').table("weather_raw")                        
+    # Aggregate readings to hourly intervals
+    .groupBy('deviceid','date',F.window('timestamp','5 minutes'))              
     .agg({"temperature":"avg","humidity":"avg","windspeed":"avg","winddirection":"last"})
-    .selectExpr('date','window','deviceid','`avg(temperature)` as temperature','`avg(humidity)` as humidity',
-                '`avg(windspeed)` as windspeed','`last(winddirection)` as winddirection')
-    .writeStream                                                               # Write the resulting stream
-    .foreachBatch(lambda i, b: merge_delta(i, SILVER_PATH + "weather_agg"))    # Pass each micro-batch to a function
-    .outputMode("update")                                                      # Merge works with update mode
-    .option("checkpointLocation", CHECKPOINT_PATH + "weather_agg")             # Checkpoint so we can restart streams gracefully
+    .withColumn("windowStart", F.col('window').start)
+    .withColumn("windowEnd", F.col('window').end)
+    .selectExpr('date','windowStart','windowEnd','deviceid','`avg(temperature)` as temperature','`avg(humidity)` as humidity','`avg(windspeed)` as windspeed','`last(winddirection)` as winddirection')
+    # Write the resulting stream
+    .writeStream
+     # Pass each micro-batch to a function
+    .foreachBatch(lambda i, b: merge_delta(i, SILVER_PATH + "weather_agg"))   
+    # Merge works with update mode
+    .outputMode("update")
+    # Checkpoint so we can restart streams gracefully
+    .option("checkpointLocation", CHECKPOINT_PATH + "weather_agg")             
     .start()
 )
 ```
@@ -182,7 +209,7 @@ Our final stage simply joins the data from the two aggregated tables (weather an
 # Read streams from Delta Silver tables and join them together on common columns (date & window)
 turbine_agg = spark.readStream.format('delta').option("ignoreChanges", True).table('turbine_agg')
 weather_agg = spark.readStream.format('delta').option("ignoreChanges", True).table('weather_agg').drop('deviceid')
-turbine_enriched = turbine_agg.join(weather_agg, ['date','window'])
+turbine_enriched = turbine_agg.join(weather_agg, ['date','windowStart','windowEnd'])
 ```
 
 We then use the newly created stream and, after using the same Delta Lake merge function, write the data to the final section of the lake.
@@ -191,7 +218,7 @@ We then use the newly created stream and, after using the same Delta Lake merge 
 # Write the stream to a foreachBatch function which performs the MERGE as before
 merge_gold_stream = (
   turbine_enriched
-    .selectExpr('date','deviceid','window.start as window','rpm','angle','temperature','humidity','windspeed','winddirection')
+    .selectExpr('date','deviceid','windowStart','windowEnd','rpm','angle','temperature','humidity','windspeed','winddirection')
     .writeStream 
     .foreachBatch(lambda i, b: merge_delta(i, GOLD_PATH + "turbine_enriched"))
     .option("checkpointLocation", CHECKPOINT_PATH + "turbine_enriched")         
@@ -201,7 +228,7 @@ merge_gold_stream = (
 
 At the end of this process, we are left with three populated and constantly updating locations of our lake, ready to be queried and used immediately.
 
-![Querying data from Synapse Spark Pools]()
+![Querying data from Synapse Spark Pools](./img/query-from-sparkpool.png)
 
 ## But Why?
 
@@ -209,7 +236,7 @@ As mentioned at the beginning, Synapse is typically discussed in the context of 
 
 Once we have set up the above streams we can utilise Synapse's built-in SQL engine to query the data. Although a word of warning at the time of writing querying delta lake tables is only possible on On-Demand SQL pools and is in public preview, meaning it is not suitable for production use.
 
-![Querying data from On-demand SQL]()
+![Querying data from On-demand SQL](./img/query-from-sqlpool.png)
 
 In addition to ad-hoc queries, you can create an external table from the Delta Lake table on the SQL On-Demand pool. This allows BI developers to query the data with T-SQL or connect to the data like a standard Azure SQL server, but with the added benefit of on-demand serverless compute: And the best part is the data never has to leave the storage account!
 
